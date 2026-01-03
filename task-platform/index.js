@@ -80,7 +80,29 @@ app.post("/process/:id", async (req, res) => {
   }
 
   // MOCK extracted text (later OCR)
-  const extractedText = "Invoice total is 4500 rupees";
+  // Read uploaded file
+const filePath = path.join(__dirname, "uploads", task.storedFile);
+const fileBuffer = fs.readFileSync(filePath);
+
+let extractedText = "";
+
+// Extract text from PDF
+try {
+  const pdfData = await pdf(fileBuffer);
+  extractedText = pdfData.text;
+} catch (err) {
+  return res.status(500).json({
+    error: "Failed to extract text from PDF",
+    details: err.message
+  });
+}
+
+if (!extractedText || extractedText.trim().length === 0) {
+  return res.status(400).json({
+    error: "No readable text found in document"
+  });
+}
+
 
 const aiResponse = await fetch(
   "https://ai-marketplace--DhruvItaliya.replit.app/infer",
