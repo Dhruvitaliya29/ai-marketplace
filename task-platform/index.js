@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 import fs from "fs";
 import cors from "cors";
+import fetch from "node-fetch";
 import pdf from "pdf-parse";
 
 // --------------------
@@ -14,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 // --------------------
-// __dirname fix (ES modules)
+// __dirname fix (ESM)
 // --------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,15 +30,21 @@ app.get("/", (req, res) => {
 });
 
 // --------------------
+// Ensure uploads folder exists (CRITICAL FIX)
+// --------------------
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR);
+}
+
+// --------------------
 // File upload setup
 // --------------------
-const upload = multer({
-  dest: path.join(__dirname, "uploads")
-});
-
+const upload = multer({ dest: UPLOAD_DIR });
 const TASKS_FILE = path.join(__dirname, "tasks.json");
 
-// init storage
+// init tasks storage
 if (!fs.existsSync(TASKS_FILE)) {
   fs.writeFileSync(TASKS_FILE, JSON.stringify([]));
 }
@@ -46,6 +53,10 @@ if (!fs.existsSync(TASKS_FILE)) {
 // Upload document
 // --------------------
 app.post("/upload", upload.single("document"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "File upload failed" });
+  }
+
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
 
   const task = {
@@ -72,7 +83,7 @@ app.get("/tasks", (req, res) => {
 });
 
 // --------------------
-// Process task using AI
+// Process task (PDF → AI)
 // --------------------
 app.post("/process/:id", async (req, res) => {
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
@@ -82,33 +93,30 @@ app.post("/process/:id", async (req, res) => {
     return res.status(404).json({ error: "Task not found" });
   }
 
-  const filePath = path.join(__dirname, "uploads", task.storedFile);
-  const fileBuffer = fs.readFileSync(filePath);
+  const filePath = path.join(UPLOAD_DIR, task.storedFile);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(500).json({ error: "Uploaded file missing" });
+  }
 
   let extractedText = "";
 
-  // Handle PDF or text
-  if (task.originalFile.toLowerCase().endsWith(".pdf")) {
-    try {
-      const pdfData = await pdf(fileBuffer);
-      extractedText = pdfData.text;
-    } catch (err) {
-      return res.status(500).json({
-        error: "Failed to extract text from PDF",
-        details: err.message
-      });
-    }
-  } else {
-    extractedText = fileBuffer.toString("utf-8");
-  }
-
-  if (!extractedText || extractedText.trim().length === 0) {
-    return res.status(400).json({
-      error: "No readable text found in document"
+  try {
+    const buffer = fs.readFileSync(filePath);
+    const pdfData = await pdf(buffer);
+    extractedText = pdfData.text;
+  } catch (err) {
+    return res.status(500).json({
+      error: "Failed to extract text from PDF",
+      details: err.message
     });
   }
 
-  // Call AI engine (PUBLIC URL)
+  if (!extractedText || extractedText.trim().length === 0) {
+    return res.status(400).json({ error: "No readable text found" });
+  }
+
+  // Call AI Marketplace
   const aiResponse = await fetch(
     "https://ai-marketplace--DhruvItaliya.replit.app/infer",
     {
@@ -121,14 +129,14 @@ app.post("/process/:id", async (req, res) => {
     }
   );
 
-  const data = await aiResponse.json();
+  const aiData = await aiResponse.json();
 
   task.status = "completed";
-  task.result = data;
+  task.result = aiData;
 
   fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
-  res.json({ message: "Processed", result: data });
+  res.json({ message: "Processed", result: aiData });
 });
 
 // --------------------
