@@ -1,48 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
   <title>AI Document Processing</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap">
-  <style>
-    body {
-      font-family: Inter, sans-serif;
-      background: radial-gradient(circle at top, #111, #000);
-      color: #fff;
-      display: flex;
-      height: 100vh;
-      align-items: center;
-      justify-content: center;
-    }
-    .card {
-      background: #0d1117;
-      padding: 40px;
-      border-radius: 16px;
-      width: 420px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.6);
-      text-align: center;
-    }
-    button {
-      width: 100%;
-      padding: 14px;
-      background: #6366f1;
-      border: none;
-      border-radius: 10px;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    input { margin: 20px 0; }
-    .status { margin-top: 15px; color: #f87171; }
-  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css">
 </head>
 <body>
-  <div class="card">
-    <h2>AI Document Processing</h2>
-    <input type="file" id="file" />
-    <button onclick="upload()">Upload & Process</button>
-    <div class="status" id="status"></div>
-  </div>
-  <script src="app.js"></script>
+
+<h2>AI Document Processing</h2>
+
+<input type="file" id="file" />
+<button onclick="upload()">Upload & Process</button>
+
+<pre id="output"></pre>
+
+<script src="app.js"></script>
 </body>
 </html>
