@@ -1,34 +1,30 @@
 async function upload() {
-  const file = document.getElementById("file").files[0];
-  const status = document.getElementById("status");
+  const fileInput = document.getElementById("file");
+  const output = document.getElementById("output");
 
-  if (!file) {
-    status.innerText = "Select a file first";
+  if (!fileInput.files.length) {
+    output.innerText = "Select a file first";
     return;
   }
 
   const formData = new FormData();
-  formData.append("document", file);
+  formData.append("document", fileInput.files[0]); // ✅ MUST MATCH BACKEND
 
-  try {
-    const res = await fetch("/upload", {
-      method: "POST",
-      body: formData
-    });
+  const uploadRes = await fetch("/upload", {
+    method: "POST",
+    body: formData
+  });
 
-    const data = await res.json();
-
-    if (!res.ok) throw new Error(data.error);
-
-    const processRes = await fetch(`/process/${data.taskId}`, {
-      method: "POST"
-    });
-
-    const result = await processRes.json();
-    status.style.color = "#22c55e";
-    status.innerText = result.result.summary || "Processed";
-  } catch (err) {
-    status.style.color = "#f87171";
-    status.innerText = "Upload failed";
+  const uploadData = await uploadRes.json();
+  if (!uploadData.taskId) {
+    output.innerText = "Upload failed";
+    return;
   }
+
+  const processRes = await fetch(`/process/${uploadData.taskId}`, {
+    method: "POST"
+  });
+
+  const result = await processRes.json();
+  output.innerText = JSON.stringify(result, null, 2);
 }
