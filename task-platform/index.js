@@ -81,17 +81,18 @@ app.post("/process/:id", async (req, res) => {
   // MOCK extracted text (later OCR)
   const extractedText = "Invoice total is 4500 rupees";
 
-  const aiResponse = await fetch(
-    "https://ai-marketplace--DhruvItaliya.replit.app/infer",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "summarizer",
-        text: extractedText
-      })
-    }
-  );
+const aiResponse = await fetch(
+  "https://ai-marketplace--DhruvItaliya.replit.app/infer",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "summarizer",
+      text: extractedText
+    })
+  }
+);
+
 
   const data = await aiResponse.json();
 
