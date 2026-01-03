@@ -1,17 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
   <title>AI Document Processing</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">
+  <style>
+    body {
+      background: radial-gradient(circle at top, #111827, #000);
+      font-family: Inter, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+    }
+    .card {
+      background: #0b1220;
+      padding: 30px;
+      border-radius: 12px;
+      width: 380px;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(0,0,0,.6);
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #6366f1;
+      border: none;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    .status {
+      margin-top: 15px;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body>
 
-<h2>AI Document Processing</h2>
-
-<input type="file" id="file" />
-<button onclick="upload()">Upload & Process</button>
-
-<pre id="output"></pre>
+<div class="card">
+  <h2>AI Document Processing</h2>
+  <input type="file" id="file" />
+  <button onclick="upload()">Upload & Process</button>
+  <div class="status" id="status"></div>
+</div>
 
 <script src="app.js"></script>
 </body>
