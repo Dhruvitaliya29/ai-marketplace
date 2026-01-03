@@ -8,38 +8,63 @@ import Tesseract from "tesseract.js";
 import { fileURLToPath } from "url";
 
 // --------------------
-// Setup
+// App setup
 // --------------------
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --------------------
+// __dirname (ESM)
+// --------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --------------------
+// Ensure uploads directory EXISTS (CRITICAL)
+// --------------------
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+// --------------------
+// Multer setup (FIXED)
+// --------------------
+const upload = multer({
+  dest: UPLOAD_DIR,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
+// --------------------
 // Serve frontend
+// --------------------
 app.use(express.static(path.join(__dirname, "public")));
 
-// Upload config
-const upload = multer({ dest: "uploads/" });
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// --------------------
+// Tasks storage
+// --------------------
 const TASKS_FILE = path.join(__dirname, "tasks.json");
 
-// Init storage
 if (!fs.existsSync(TASKS_FILE)) {
   fs.writeFileSync(TASKS_FILE, JSON.stringify([]));
 }
 
 // --------------------
-// Health check
-// --------------------
-app.get("/", (req, res) => {
-  res.send("Task Platform Running with OCR + AI");
-});
-
-// --------------------
 // Upload document
 // --------------------
 app.post("/upload", upload.single("document"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      error: "Upload failed – no file received"
+    });
+  }
+
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
 
   const task = {
@@ -54,7 +79,10 @@ app.post("/upload", upload.single("document"), (req, res) => {
   tasks.push(task);
   fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
-  res.json({ message: "Uploaded", taskId: task.id });
+  res.json({
+    message: "Uploaded",
+    taskId: task.id
+  });
 });
 
 // --------------------
@@ -76,21 +104,28 @@ app.post("/process/:id", async (req, res) => {
     return res.status(404).json({ error: "Task not found" });
   }
 
-  const filePath = path.join(__dirname, "uploads", task.storedFile);
+  const filePath = path.join(UPLOAD_DIR, task.storedFile);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(500).json({
+      error: "Uploaded file missing on server"
+    });
+  }
+
   let extractedText = "";
 
   try {
-    // 1️⃣ Try PDF text extraction
     const buffer = fs.readFileSync(filePath);
+
+    // Try PDF text
     const pdfData = await pdf(buffer);
     extractedText = pdfData.text.trim();
 
-    // 2️⃣ If PDF has no text → OCR fallback
+    // OCR fallback
     if (!extractedText) {
-      const ocrResult = await Tesseract.recognize(filePath, "eng");
-      extractedText = ocrResult.data.text;
+      const ocr = await Tesseract.recognize(filePath, "eng");
+      extractedText = ocr.data.text;
     }
-
   } catch (err) {
     return res.status(500).json({
       error: "Text extraction failed",
@@ -104,7 +139,7 @@ app.post("/process/:id", async (req, res) => {
     });
   }
 
-  // 3️⃣ Send to AI Marketplace
+  // AI call
   const aiResponse = await fetch(
     "https://ai-marketplace--DhruvItaliya.replit.app/infer",
     {
@@ -125,8 +160,8 @@ app.post("/process/:id", async (req, res) => {
   fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
   res.json({
-    message: "Processed with OCR + AI",
-    summary: aiData
+    message: "Processed",
+    result: aiData
   });
 });
 
