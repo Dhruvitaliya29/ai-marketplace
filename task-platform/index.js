@@ -1,62 +1,45 @@
 import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
+import cors from "cors";
 import multer from "multer";
 import fs from "fs";
-import cors from "cors";
-import fetch from "node-fetch";
+import path from "path";
 import pdf from "pdf-parse";
+import Tesseract from "tesseract.js";
+import { fileURLToPath } from "url";
 
 // --------------------
-// App setup
+// Setup
 // --------------------
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --------------------
-// __dirname fix (ESM)
-// --------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --------------------
 // Serve frontend
-// --------------------
 app.use(express.static(path.join(__dirname, "public")));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// --------------------
-// Ensure uploads folder exists (CRITICAL FIX)
-// --------------------
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR);
-}
-
-// --------------------
-// File upload setup
-// --------------------
-const upload = multer({ dest: UPLOAD_DIR });
+// Upload config
+const upload = multer({ dest: "uploads/" });
 const TASKS_FILE = path.join(__dirname, "tasks.json");
 
-// init tasks storage
+// Init storage
 if (!fs.existsSync(TASKS_FILE)) {
   fs.writeFileSync(TASKS_FILE, JSON.stringify([]));
 }
 
 // --------------------
+// Health check
+// --------------------
+app.get("/", (req, res) => {
+  res.send("Task Platform Running with OCR + AI");
+});
+
+// --------------------
 // Upload document
 // --------------------
 app.post("/upload", upload.single("document"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "File upload failed" });
-  }
-
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
 
   const task = {
@@ -83,7 +66,7 @@ app.get("/tasks", (req, res) => {
 });
 
 // --------------------
-// Process task (PDF → AI)
+// Process task (OCR + AI)
 // --------------------
 app.post("/process/:id", async (req, res) => {
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
@@ -93,30 +76,35 @@ app.post("/process/:id", async (req, res) => {
     return res.status(404).json({ error: "Task not found" });
   }
 
-  const filePath = path.join(UPLOAD_DIR, task.storedFile);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(500).json({ error: "Uploaded file missing" });
-  }
-
+  const filePath = path.join(__dirname, "uploads", task.storedFile);
   let extractedText = "";
 
   try {
+    // 1️⃣ Try PDF text extraction
     const buffer = fs.readFileSync(filePath);
     const pdfData = await pdf(buffer);
-    extractedText = pdfData.text;
+    extractedText = pdfData.text.trim();
+
+    // 2️⃣ If PDF has no text → OCR fallback
+    if (!extractedText) {
+      const ocrResult = await Tesseract.recognize(filePath, "eng");
+      extractedText = ocrResult.data.text;
+    }
+
   } catch (err) {
     return res.status(500).json({
-      error: "Failed to extract text from PDF",
+      error: "Text extraction failed",
       details: err.message
     });
   }
 
-  if (!extractedText || extractedText.trim().length === 0) {
-    return res.status(400).json({ error: "No readable text found" });
+  if (!extractedText || extractedText.length < 10) {
+    return res.status(400).json({
+      error: "No readable text found"
+    });
   }
 
-  // Call AI Marketplace
+  // 3️⃣ Send to AI Marketplace
   const aiResponse = await fetch(
     "https://ai-marketplace--DhruvItaliya.replit.app/infer",
     {
@@ -136,13 +124,16 @@ app.post("/process/:id", async (req, res) => {
 
   fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
-  res.json({ message: "Processed", result: aiData });
+  res.json({
+    message: "Processed with OCR + AI",
+    summary: aiData
+  });
 });
 
 // --------------------
 // Start server
 // --------------------
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log("Task platform running on", PORT);
 });
