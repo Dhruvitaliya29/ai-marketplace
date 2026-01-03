@@ -23,7 +23,7 @@ app.post("/infer", async (req, res) => {
   if (model === "summarizer") {
     targetUrl = "https://ai-marketplace-1-x1p6.onrender.com/infer";
   } else if (model === "sentiment") {
-    targetUrl = "https://ai-marketplace-2-xxxx.onrender.com/infer";
+    targetUrl = "https://ai-marketplace-2.onrender.com/infer";
   } else {
     return res.status(400).json({ error: "Invalid model" });
   }
