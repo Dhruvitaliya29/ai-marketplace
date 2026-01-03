@@ -1,1 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Document Processing Platform</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-gray-900 via-black to-gray-800 min-h-screen text-white">
+
+  <div class="max-w-4xl mx-auto py-16 px-6">
+
+    <!-- Header -->
+    <h1 class="text-4xl font-bold text-center mb-3">
+      AI Document Processing
+    </h1>
+    <p class="text-center text-gray-400 mb-10">
+      Upload documents • Process with AI • Get instant results
+    </p>
+
+    <!-- Card -->
+    <div class="bg-gray-900/70 backdrop-blur rounded-2xl p-10 shadow-2xl">
+
+      <!-- Drop Area -->
+      <div
+        id="dropArea"
+        class="border-2 border-dashed border-gray-600 rounded-xl p-10 text-center cursor-pointer hover:border-indigo-500 transition-all"
+      >
+        <p class="text-lg text-gray-300">Drag & drop your file here</p>
+        <p class="text-sm text-gray-500 mt-2">or click to browse</p>
+        <input type="file" id="fileInput" class="hidden" />
+      </div>
+
+      <!-- Upload Button -->
+      <button
+        id="uploadBtn"
+        class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 transition-all py-3 rounded-xl font-semibold text-lg"
+      >
+        Upload & Create Task
+      </button>
+
+      <!-- Status -->
+      <div
+        id="status"
+        class="mt-8 text-center text-sm text-gray-300"
+      ></div>
+
+    </div>
+
+    <!-- Footer -->
+    <p class="text-center text-gray-500 text-xs mt-10">
+      Powered by AI • Built by Dhruv
+    </p>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
 
