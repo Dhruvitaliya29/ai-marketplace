@@ -3,7 +3,7 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
-import fetch from "node-fetch";
+
 
 const app = express();
 app.use(cors());
