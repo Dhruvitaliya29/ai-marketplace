@@ -1,187 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>AI Document Processing</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8" />
+<title>AI Document Intelligence</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <style>
-    * {
-      box-sizing: border-box;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+<style>
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #1f2a44, #06070c);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: system-ui, sans-serif;
+  color: #fff;
+}
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: radial-gradient(circle at top, #1a1f36, #05060a);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-    }
+.card {
+  width: 420px;
+  background: rgba(18, 25, 55, 0.9);
+  border-radius: 14px;
+  padding: 28px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  text-align: center;
+}
 
-    .card {
-      width: 420px;
-      max-width: 95%;
-      background: rgba(20, 25, 50, 0.85);
-      border-radius: 14px;
-      padding: 28px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-      text-align: center;
-    }
+h1 { margin-bottom: 20px; }
 
-    h1 {
-      margin: 0 0 20px;
-      font-size: 22px;
-      letter-spacing: 0.3px;
-    }
+input, button {
+  width: 100%;
+  margin-top: 12px;
+}
 
-    input[type="file"] {
-      width: 100%;
-      margin-bottom: 14px;
-      color: #ddd;
-    }
+button {
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: #6366f1;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
 
-    button {
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
-      border: none;
-      font-size: 15px;
-      font-weight: 600;
-      background: linear-gradient(135deg, #6a6dff, #7c83ff);
-      color: #fff;
-      cursor: pointer;
-      transition: transform 0.1s ease, opacity 0.1s ease;
-    }
+button:disabled { opacity: .6; }
 
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
+#status {
+  margin-top: 12px;
+  font-size: 14px;
+}
 
-    button:hover:not(:disabled) {
-      transform: translateY(-1px);
-    }
-
-    .status {
-      margin-top: 14px;
-      font-size: 14px;
-      min-height: 18px;
-    }
-
-    .loading {
-      color: #f5c542;
-    }
-
-    .success {
-      color: #35d49a;
-    }
-
-    .error {
-      color: #ff6b6b;
-    }
-
-    .summary-box {
-      margin-top: 18px;
-      background: rgba(0, 0, 0, 0.35);
-      padding: 14px;
-      border-radius: 10px;
-      font-size: 14px;
-      text-align: left;
-      white-space: pre-wrap;
-      line-height: 1.5;
-      display: none;
-    }
-
-    .footer {
-      margin-top: 16px;
-      font-size: 11px;
-      opacity: 0.6;
-    }
-  </style>
+#output {
+  margin-top: 16px;
+  text-align: left;
+  white-space: pre-wrap;
+  font-size: 14px;
+  display: none;
+}
+</style>
 </head>
+
 <body>
+<div class="card">
+  <h1>AI Document Intelligence</h1>
 
-  <div class="card">
-    <h1>AI Document Processing</h1>
+  <input type="file" id="fileInput" accept=".pdf" />
+  <button id="uploadBtn">Upload & Process</button>
 
-    <input id="fileInput" type="file" accept=".pdf" />
+  <div id="status"></div>
+  <div id="output"></div>
+</div>
 
-    <button id="uploadBtn">Upload & Process</button>
-
-    <div id="status" class="status"></div>
-
-    <div id="summary" class="summary-box"></div>
-
-    <div class="footer">Powered by AI Marketplace</div>
-  </div>
-
-  <script>
-    const uploadBtn = document.getElementById("uploadBtn");
-    const fileInput = document.getElementById("fileInput");
-    const statusEl = document.getElementById("status");
-    const summaryEl = document.getElementById("summary");
-
-    uploadBtn.onclick = async () => {
-      summaryEl.style.display = "none";
-      summaryEl.textContent = "";
-
-      if (!fileInput.files.length) {
-        statusEl.textContent = "Please select a PDF file.";
-        statusEl.className = "status error";
-        return;
-      }
-
-      uploadBtn.disabled = true;
-      statusEl.textContent = "Uploading document…";
-      statusEl.className = "status loading";
-
-      try {
-        // STEP 1: Upload
-        const formData = new FormData();
-        formData.append("document", fileInput.files[0]);
-
-        const uploadRes = await fetch("/upload", {
-          method: "POST",
-          body: formData
-        });
-
-        if (!uploadRes.ok) throw new Error("Upload failed");
-
-        const uploadData = await uploadRes.json();
-        const taskId = uploadData.taskId;
-
-        statusEl.textContent = "Processing with AI…";
-
-        // STEP 2: Process
-        const processRes = await fetch(`/process/${taskId}`, {
-          method: "POST"
-        });
-
-        if (!processRes.ok) throw new Error("Processing failed");
-
-        const result = await processRes.json();
-
-        if (!result.summary || result.summary.trim().length === 0) {
-          throw new Error("No summary generated");
-        }
-
-        statusEl.textContent = "Completed ✓";
-        statusEl.className = "status success";
-
-        summaryEl.textContent = result.summary;
-        summaryEl.style.display = "block";
-
-      } catch (err) {
-        statusEl.textContent = err.message;
-        statusEl.className = "status error";
-      } finally {
-        uploadBtn.disabled = false;
-      }
-    };
-  </script>
-
+<script src="app.js"></script>
 </body>
 </html>
