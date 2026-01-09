@@ -5,50 +5,46 @@ import path from "path";
 import cors from "cors";
 import pdf from "pdf-parse";
 import fetch from "node-fetch";
-import Tesseract from "tesseract.js";
 import { fileURLToPath } from "url";
 
-// --------------------
-// Setup
-// --------------------
+/* ================================
+   BASIC SETUP
+================================ */
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --------------------
-// __dirname fix
-// --------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --------------------
-// Ensure folders exist
-// --------------------
+/* ================================
+   STORAGE SETUP
+================================ */
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
 const TASKS_FILE = path.join(__dirname, "tasks.json");
 if (!fs.existsSync(TASKS_FILE)) fs.writeFileSync(TASKS_FILE, "[]");
 
-// --------------------
-// Serve frontend
-// --------------------
+/* ================================
+   FRONTEND
+================================ */
 app.use(express.static(path.join(__dirname, "public")));
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// --------------------
-// Multer config
-// --------------------
+/* ================================
+   FILE UPLOAD
+================================ */
 const upload = multer({ dest: UPLOAD_DIR });
 
-// --------------------
-// Upload document
-// --------------------
 app.post("/upload", upload.single("document"), (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
     const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
 
@@ -71,9 +67,9 @@ app.post("/upload", upload.single("document"), (req, res) => {
   }
 });
 
-// --------------------
-// Process document (PDF + OCR)
-// --------------------
+/* ================================
+   PROCESS DOCUMENT (AI)
+================================ */
 app.post("/process/:id", async (req, res) => {
   try {
     const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
@@ -83,46 +79,32 @@ app.post("/process/:id", async (req, res) => {
     const filePath = path.join(UPLOAD_DIR, task.storedFile);
     const buffer = fs.readFileSync(filePath);
 
-    let extractedText = "";
+    const pdfData = await pdf(buffer);
+    const rawText = pdfData.text || "";
 
-    // 1️⃣ Try PDF text extraction
-    try {
-      const pdfData = await pdf(buffer);
-      extractedText = pdfData.text?.trim();
-    } catch {}
-
-    // 2️⃣ OCR fallback if PDF text is empty
-    if (!extractedText) {
-      console.log("Running OCR fallback...");
-      const ocrResult = await Tesseract.recognize(filePath, "eng");
-      extractedText = ocrResult.data.text;
-    }
-
-    if (!extractedText || extractedText.length < 20) {
+    if (!rawText.trim()) {
       return res.status(400).json({ error: "No readable text found" });
     }
 
-    // --------------------
-    // Prompt routing
-    // --------------------
+    /* -------- AI INSTRUCTIONS -------- */
     let instruction = "";
 
     if (task.taskType === "resume") {
       instruction = `
 You are an expert HR analyst.
-Summarize this resume professionally.
 Extract:
-- Name
+- Candidate name
 - Skills
 - Experience
 - Education
 - Strengths
+Return concise structured output.
 `;
     } else if (task.taskType === "invoice") {
       instruction = `
 You are a finance assistant.
 Extract:
-- Vendor
+- Vendor name
 - Invoice number
 - Total amount
 - Due date
@@ -131,41 +113,59 @@ Extract:
       instruction = `
 You are an AI document analyst.
 Summarize clearly.
-Extract key points and insights.
+Extract:
+- Purpose
+- Key points
+- Actionable insights
 `;
     }
 
-    const finalPrompt = `
+    /* -------- CHUNKING (ACCURACY BOOST) -------- */
+    const CHUNK_SIZE = 2000;
+    const chunks = [];
+    for (let i = 0; i < rawText.length; i += CHUNK_SIZE) {
+      chunks.push(rawText.slice(i, i + CHUNK_SIZE));
+    }
+
+    let finalSummary = "";
+
+    for (const chunk of chunks) {
+      const prompt = `
 ${instruction}
 
 Document content:
-${extractedText}
+${chunk}
 `;
 
-    // --------------------
-    // Call AI Marketplace
-    // --------------------
-    const aiResponse = await fetch(
-      "https://ai-marketplace--DhruvItaliya.replit.app/infer",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "summarizer",
-          text: finalPrompt
-        })
+      const aiResponse = await fetch(
+        "https://ai-marketplace--DhruvItaliya.replit.app/infer",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "summarizer",
+            text: prompt
+          })
+        }
+      );
+
+      if (!aiResponse.ok) {
+        throw new Error("AI service failed");
       }
-    );
 
-    if (!aiResponse.ok) throw new Error("AI service failed");
-
-    const aiResult = await aiResponse.json();
+      const data = await aiResponse.json();
+      finalSummary += "\n" + (data?.result?.summary || "");
+    }
 
     task.status = "completed";
-    task.result = aiResult;
+    task.result = {
+      summary: finalSummary.trim()
+    };
+
     fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
-    res.json({ success: true, result: aiResult });
+    res.json({ success: true, result: task.result });
+
   } catch (err) {
     res.status(500).json({
       error: "Processing failed",
@@ -174,9 +174,9 @@ ${extractedText}
   }
 });
 
-// --------------------
-// Start server
-// --------------------
+/* ================================
+   SERVER START
+================================ */
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log("Task platform running on", PORT);
