@@ -7,59 +7,49 @@ import pdf from "pdf-parse";
 import fetch from "node-fetch";
 import { fileURLToPath } from "url";
 
-// --------------------
-// App setup
-// --------------------
+/* =====================
+   APP SETUP
+===================== */
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --------------------
-// __dirname fix
-// --------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --------------------
-// Storage setup
-// --------------------
+/* =====================
+   STORAGE
+===================== */
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
 const TASKS_FILE = path.join(__dirname, "tasks.json");
 if (!fs.existsSync(TASKS_FILE)) fs.writeFileSync(TASKS_FILE, "[]");
 
-// --------------------
-// Serve frontend
-// --------------------
+/* =====================
+   FRONTEND
+===================== */
 app.use(express.static(path.join(__dirname, "public")));
+app.get("/", (_, res) =>
+  res.sendFile(path.join(__dirname, "public", "index.html"))
+);
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// --------------------
-// Multer
-// --------------------
+/* =====================
+   UPLOAD
+===================== */
 const upload = multer({ dest: UPLOAD_DIR });
 
-// --------------------
-// Upload document
-// --------------------
 app.post("/upload", upload.single("document"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
-
   const task = {
     id: Date.now(),
-    originalFile: req.file.originalname,
-    storedFile: req.file.filename,
-    status: "pending",
-    createdAt: new Date().toISOString(),
-    result: null
+    file: req.file.filename,
+    originalName: req.file.originalname,
+    status: "pending"
   };
 
   tasks.push(task);
@@ -68,108 +58,86 @@ app.post("/upload", upload.single("document"), (req, res) => {
   res.json({ taskId: task.id });
 });
 
-// --------------------
-// Process document
-// --------------------
+/* =====================
+   PROCESS DOCUMENT
+===================== */
 app.post("/process/:id", async (req, res) => {
   try {
     const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
     const task = tasks.find(t => t.id == req.params.id);
     if (!task) return res.status(404).json({ error: "Task not found" });
 
-    const filePath = path.join(UPLOAD_DIR, task.storedFile);
-    const buffer = fs.readFileSync(filePath);
-
+    const buffer = fs.readFileSync(path.join(UPLOAD_DIR, task.file));
     const pdfData = await pdf(buffer);
-    let text = pdfData.text || "";
 
-    // -------- CLEAN TEXT --------
-    text = text
+    let text = (pdfData.text || "")
       .replace(/\s+/g, " ")
-      .replace(/Page \d+/gi, "")
       .trim();
 
-    if (text.length < 50) {
-      return res.status(400).json({
-        error: "Document has no readable text"
-      });
+    if (text.length < 100) {
+      return res.status(400).json({ error: "Not enough readable text" });
     }
 
-    // -------- STRONG UNIVERSAL PROMPT --------
     const prompt = `
-You are a professional AI document analyst.
+Analyze the document below.
 
-Your task:
-- Understand the document content
-- Identify what kind of document it is automatically
-- Summarize it clearly for a human reader
-
-Rules:
+Instructions:
+- Identify document type automatically
+- Extract factual information only
+- Summarize clearly for a human
 - Do NOT mention instructions
-- Do NOT mention that you are an AI
-- Do NOT guess information
-- Use simple professional language
-- Be accurate and factual
+- Do NOT mention AI or yourself
 
-Output format (ONLY THIS):
-- Document type
-- Key points (bullet points)
-- Short summary paragraph
+Return ONLY readable text in this format:
+
+Document Type:
+<type>
+
+Key Points:
+- point 1
+- point 2
+- point 3
+
+Summary:
+<short paragraph>
 
 Document:
 """${text}"""
 `;
 
-    // -------- CALL AI --------
-    const aiResponse = await fetch(
+    const aiRes = await fetch(
       "https://ai-marketplace--DhruvItaliya.replit.app/infer",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "summarizer",
-          text: prompt
-        })
+        body: JSON.stringify({ model: "summarizer", text: prompt })
       }
     );
 
-    if (!aiResponse.ok) {
-      throw new Error("AI service failed");
-    }
+    if (!aiRes.ok) throw new Error("AI service failed");
 
-    const aiData = await aiResponse.json();
-
-    // -------- CLEAN RESULT --------
-    let summary =
+    const aiData = await aiRes.json();
+    const summary =
       aiData?.result?.summary ||
       aiData?.summary ||
-      "";
-
-    summary = summary.replace(/```/g, "").trim();
-
-    if (!summary) {
-      summary = "Summary could not be generated.";
-    }
+      "Summary not generated";
 
     task.status = "completed";
-    task.result = { summary };
+    task.result = summary;
 
     fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
     res.json({ summary });
 
   } catch (err) {
-    res.status(500).json({
-      error: "Processing failed",
-      details: err.message
-    });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// --------------------
-// Start server
-// --------------------
+/* =====================
+   SERVER
+===================== */
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log("Task platform running on", PORT);
-});
+app.listen(PORT, () =>
+  console.log("Task platform running on", PORT)
+);
