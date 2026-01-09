@@ -88,7 +88,12 @@ app.post("/process/:id", async (req, res) => {
     const buffer = fs.readFileSync(filePath);
 
     // Extract text from PDF
-    const pdfData = await pdf(buffer);
+    if (!pdfData.text || pdfData.text.trim().length === 0) {
+  return res.status(400).json({
+    error: "No readable text found in document"
+  });
+}
+
     let instruction = "";
 
 if (task.taskType === "resume") {
@@ -144,7 +149,11 @@ ${pdfData.text}
       }
     );
 
-    const aiResult = await aiResponse.json();
+    if (!aiResponse.ok) {
+  throw new Error("AI service failed");
+}
+
+const aiResult = await aiResponse.json();
 
     task.status = "completed";
     task.result = aiResult;
