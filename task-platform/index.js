@@ -89,18 +89,46 @@ app.post("/process/:id", async (req, res) => {
 
     // Extract text from PDF
     const pdfData = await pdf(buffer);
-    const extractedText = `
-You are an AI document analyst.
+    let instruction = "";
 
-Summarize the following document clearly.
+if (task.taskType === "resume") {
+  instruction = `
+You are an expert HR analyst.
+Summarize this resume professionally.
+Extract:
+- Candidate name
+- Skills
+- Experience
+- Education
+- Strengths
+`;
+} else if (task.taskType === "invoice") {
+  instruction = `
+You are a finance assistant.
+Extract from this invoice:
+- Vendor name
+- Invoice number
+- Total amount
+- Due date
+`;
+} else {
+  instruction = `
+You are an AI document analyst.
+Summarize the document clearly.
 Extract:
 - Key purpose
 - Important details
 - Actionable insights
+`;
+}
+
+const extractedText = `
+${instruction}
 
 Document content:
 ${pdfData.text}
 `;
+
 
 
     // Call AI service (your existing Replit AI)
