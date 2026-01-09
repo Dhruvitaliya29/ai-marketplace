@@ -1,28 +1,22 @@
-console.log("app.js loaded ✅");
+const uploadBtn = document.getElementById("uploadBtn");
+const fileInput = document.getElementById("fileInput");
+const statusEl = document.getElementById("status");
+const resultEl = document.getElementById("result");
 
-const form = document.getElementById("uploadForm");
-const fileInput = document.getElementById("document");
-const taskType = document.getElementById("taskType");
-const statusText = document.getElementById("status");
-const summaryBox = document.getElementById("summary");
-
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  statusText.innerText = "Uploading...";
-  summaryBox.innerText = "";
-
+uploadBtn.addEventListener("click", async () => {
   if (!fileInput.files.length) {
-    statusText.innerText = "Please select a file";
+    alert("Please select a file");
     return;
   }
 
-  const formData = new FormData();
-  formData.append("document", fileInput.files[0]);
-  formData.append("taskType", taskType.value);
+  statusEl.innerText = "Uploading...";
+  resultEl.innerText = "";
 
   try {
-    // 1️⃣ Upload
+    // ---------- Upload ----------
+    const formData = new FormData();
+    formData.append("document", fileInput.files[0]);
+
     const uploadRes = await fetch("/upload", {
       method: "POST",
       body: formData
@@ -31,13 +25,12 @@ form.addEventListener("submit", async (e) => {
     const uploadData = await uploadRes.json();
 
     if (!uploadData.success) {
-      statusText.innerText = "Upload failed";
-      return;
+      throw new Error("Upload failed");
     }
 
-    statusText.innerText = "Processing with AI...";
+    statusEl.innerText = "Processing...";
 
-    // 2️⃣ Process
+    // ---------- Process ----------
     const processRes = await fetch(`/process/${uploadData.taskId}`, {
       method: "POST"
     });
@@ -45,17 +38,29 @@ form.addEventListener("submit", async (e) => {
     const processData = await processRes.json();
 
     if (!processData.success) {
-      statusText.innerText = "Processing failed";
-      return;
+      throw new Error("Processing failed");
     }
 
-    // 3️⃣ Display
-    statusText.innerText = "Completed ✅";
-    summaryBox.innerText =
-      processData.result?.summary || "No summary generated";
+    // ---------- Display result ----------
+    const aiResult = processData.result;
+
+    let outputText = "";
+
+    if (typeof aiResult === "string") {
+      outputText = aiResult;
+    } else if (aiResult.summary) {
+      outputText = aiResult.summary;
+    } else if (aiResult.text) {
+      outputText = aiResult.text;
+    } else {
+      outputText = JSON.stringify(aiResult, null, 2);
+    }
+
+    statusEl.innerText = "Completed ✅";
+    resultEl.innerText = outputText;
 
   } catch (err) {
-    console.error(err);
-    statusText.innerText = "Server error";
+    statusEl.innerText = "Error ❌";
+    resultEl.innerText = err.message;
   }
 });
