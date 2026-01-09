@@ -55,13 +55,15 @@ app.post("/upload", upload.single("document"), (req, res) => {
     const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
 
     const task = {
-      id: Date.now(),
-      originalFile: req.file.originalname,
-      storedFile: req.file.filename,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      result: null
-    };
+  id: Date.now(),
+  originalFile: req.file.originalname,
+  storedFile: req.file.filename,
+  taskType: req.body.taskType || "general",
+  status: "pending",
+  createdAt: new Date().toISOString(),
+  result: null
+};
+
 
     tasks.push(task);
     fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
