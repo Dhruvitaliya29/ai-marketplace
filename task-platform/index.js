@@ -5,6 +5,7 @@ import path from "path";
 import cors from "cors";
 import pdf from "pdf-parse";
 import fetch from "node-fetch";
+import Tesseract from "tesseract.js";
 import { fileURLToPath } from "url";
 
 // --------------------
@@ -33,7 +34,6 @@ if (!fs.existsSync(TASKS_FILE)) fs.writeFileSync(TASKS_FILE, "[]");
 // Serve frontend
 // --------------------
 app.use(express.static(path.join(__dirname, "public")));
-
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -48,9 +48,7 @@ const upload = multer({ dest: UPLOAD_DIR });
 // --------------------
 app.post("/upload", upload.single("document"), (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
     const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
 
@@ -74,29 +72,38 @@ app.post("/upload", upload.single("document"), (req, res) => {
 });
 
 // --------------------
-// Process document
+// Process document (PDF + OCR)
 // --------------------
 app.post("/process/:id", async (req, res) => {
   try {
     const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
     const task = tasks.find(t => t.id == req.params.id);
-
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     const filePath = path.join(UPLOAD_DIR, task.storedFile);
     const buffer = fs.readFileSync(filePath);
 
-    // ✅ Extract text from PDF
-    const pdfData = await pdf(buffer);
+    let extractedText = "";
 
-    if (!pdfData.text || pdfData.text.trim().length === 0) {
-      return res.status(400).json({
-        error: "No readable text found in document"
-      });
+    // 1️⃣ Try PDF text extraction
+    try {
+      const pdfData = await pdf(buffer);
+      extractedText = pdfData.text?.trim();
+    } catch {}
+
+    // 2️⃣ OCR fallback if PDF text is empty
+    if (!extractedText) {
+      console.log("Running OCR fallback...");
+      const ocrResult = await Tesseract.recognize(filePath, "eng");
+      extractedText = ocrResult.data.text;
+    }
+
+    if (!extractedText || extractedText.length < 20) {
+      return res.status(400).json({ error: "No readable text found" });
     }
 
     // --------------------
-    // Dynamic prompt routing
+    // Prompt routing
     // --------------------
     let instruction = "";
 
@@ -105,7 +112,7 @@ app.post("/process/:id", async (req, res) => {
 You are an expert HR analyst.
 Summarize this resume professionally.
 Extract:
-- Candidate name
+- Name
 - Skills
 - Experience
 - Education
@@ -114,8 +121,8 @@ Extract:
     } else if (task.taskType === "invoice") {
       instruction = `
 You are a finance assistant.
-Extract from this invoice:
-- Vendor name
+Extract:
+- Vendor
 - Invoice number
 - Total amount
 - Due date
@@ -123,19 +130,16 @@ Extract from this invoice:
     } else {
       instruction = `
 You are an AI document analyst.
-Summarize the document clearly.
-Extract:
-- Key purpose
-- Important details
-- Actionable insights
+Summarize clearly.
+Extract key points and insights.
 `;
     }
 
-    const extractedText = `
+    const finalPrompt = `
 ${instruction}
 
 Document content:
-${pdfData.text}
+${extractedText}
 `;
 
     // --------------------
@@ -148,20 +152,17 @@ ${pdfData.text}
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "summarizer",
-          text: extractedText
+          text: finalPrompt
         })
       }
     );
 
-    if (!aiResponse.ok) {
-      throw new Error("AI service failed");
-    }
+    if (!aiResponse.ok) throw new Error("AI service failed");
 
     const aiResult = await aiResponse.json();
 
     task.status = "completed";
     task.result = aiResult;
-
     fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
     res.json({ success: true, result: aiResult });
