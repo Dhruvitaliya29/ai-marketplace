@@ -8,7 +8,7 @@ import fetch from "node-fetch";
 import { fileURLToPath } from "url";
 
 /* =====================
-   APP SETUP
+   SETUP
 ===================== */
 const app = express();
 app.use(cors());
@@ -40,15 +40,12 @@ app.get("/", (_, res) =>
 const upload = multer({ dest: UPLOAD_DIR });
 
 app.post("/upload", upload.single("document"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
   const task = {
     id: Date.now(),
     file: req.file.filename,
-    originalName: req.file.originalname,
     status: "pending"
   };
 
@@ -70,25 +67,16 @@ app.post("/process/:id", async (req, res) => {
     const buffer = fs.readFileSync(path.join(UPLOAD_DIR, task.file));
     const pdfData = await pdf(buffer);
 
-    let text = (pdfData.text || "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (text.length < 100) {
-      return res.status(400).json({ error: "Not enough readable text" });
+    const documentText = (pdfData.text || "").replace(/\s+/g, " ").trim();
+    if (documentText.length < 100) {
+      return res.status(400).json({ error: "Insufficient readable text" });
     }
 
+    // 🔥 CLEAN PROMPT (NO ROLE, NO INSTRUCTIONS RETURNED)
     const prompt = `
-Analyze the document below.
+Return ONLY the final analysis.
 
-Instructions:
-- Identify document type automatically
-- Extract factual information only
-- Summarize clearly for a human
-- Do NOT mention instructions
-- Do NOT mention AI or yourself
-
-Return ONLY readable text in this format:
+FORMAT STRICTLY AS:
 
 Document Type:
 <type>
@@ -99,10 +87,10 @@ Key Points:
 - point 3
 
 Summary:
-<short paragraph>
+<concise paragraph>
 
-Document:
-"""${text}"""
+DOCUMENT:
+"""${documentText}"""
 `;
 
     const aiRes = await fetch(
@@ -114,13 +102,20 @@ Document:
       }
     );
 
-    if (!aiRes.ok) throw new Error("AI service failed");
+    if (!aiRes.ok) throw new Error("AI service error");
 
     const aiData = await aiRes.json();
-    const summary =
+
+    // ✅ SAFE EXTRACTION
+    let summary =
       aiData?.result?.summary ||
       aiData?.summary ||
-      "Summary not generated";
+      "";
+
+    // 🚿 FINAL SANITIZATION (extra safety)
+    summary = summary
+      .replace(/Analyze the document below[\s\S]*?DOCUMENT:/i, "")
+      .trim();
 
     task.status = "completed";
     task.result = summary;
