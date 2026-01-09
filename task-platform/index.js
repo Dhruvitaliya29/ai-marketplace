@@ -55,15 +55,14 @@ app.post("/upload", upload.single("document"), (req, res) => {
     const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
 
     const task = {
-  id: Date.now(),
-  originalFile: req.file.originalname,
-  storedFile: req.file.filename,
-  taskType: req.body.taskType || "general",
-  status: "pending",
-  createdAt: new Date().toISOString(),
-  result: null
-};
-
+      id: Date.now(),
+      originalFile: req.file.originalname,
+      storedFile: req.file.filename,
+      taskType: req.body.taskType || "general",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      result: null
+    };
 
     tasks.push(task);
     fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
@@ -87,17 +86,22 @@ app.post("/process/:id", async (req, res) => {
     const filePath = path.join(UPLOAD_DIR, task.storedFile);
     const buffer = fs.readFileSync(filePath);
 
-    // Extract text from PDF
-    if (!pdfData.text || pdfData.text.trim().length === 0) {
-  return res.status(400).json({
-    error: "No readable text found in document"
-  });
-}
+    // ✅ Extract text from PDF
+    const pdfData = await pdf(buffer);
 
+    if (!pdfData.text || pdfData.text.trim().length === 0) {
+      return res.status(400).json({
+        error: "No readable text found in document"
+      });
+    }
+
+    // --------------------
+    // Dynamic prompt routing
+    // --------------------
     let instruction = "";
 
-if (task.taskType === "resume") {
-  instruction = `
+    if (task.taskType === "resume") {
+      instruction = `
 You are an expert HR analyst.
 Summarize this resume professionally.
 Extract:
@@ -107,8 +111,8 @@ Extract:
 - Education
 - Strengths
 `;
-} else if (task.taskType === "invoice") {
-  instruction = `
+    } else if (task.taskType === "invoice") {
+      instruction = `
 You are a finance assistant.
 Extract from this invoice:
 - Vendor name
@@ -116,8 +120,8 @@ Extract from this invoice:
 - Total amount
 - Due date
 `;
-} else {
-  instruction = `
+    } else {
+      instruction = `
 You are an AI document analyst.
 Summarize the document clearly.
 Extract:
@@ -125,18 +129,18 @@ Extract:
 - Important details
 - Actionable insights
 `;
-}
+    }
 
-const extractedText = `
+    const extractedText = `
 ${instruction}
 
 Document content:
 ${pdfData.text}
 `;
 
-
-
-    // Call AI service (your existing Replit AI)
+    // --------------------
+    // Call AI Marketplace
+    // --------------------
     const aiResponse = await fetch(
       "https://ai-marketplace--DhruvItaliya.replit.app/infer",
       {
@@ -150,10 +154,10 @@ ${pdfData.text}
     );
 
     if (!aiResponse.ok) {
-  throw new Error("AI service failed");
-}
+      throw new Error("AI service failed");
+    }
 
-const aiResult = await aiResponse.json();
+    const aiResult = await aiResponse.json();
 
     task.status = "completed";
     task.result = aiResult;
@@ -170,7 +174,7 @@ const aiResult = await aiResponse.json();
 });
 
 // --------------------
-// Start server (Railway compatible)
+// Start server
 // --------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
