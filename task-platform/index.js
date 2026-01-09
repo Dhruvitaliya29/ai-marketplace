@@ -87,7 +87,19 @@ app.post("/process/:id", async (req, res) => {
 
     // Extract text from PDF
     const pdfData = await pdf(buffer);
-    const extractedText = pdfData.text || "No readable text found";
+    const extractedText = `
+You are an AI document analyst.
+
+Summarize the following document clearly.
+Extract:
+- Key purpose
+- Important details
+- Actionable insights
+
+Document content:
+${pdfData.text}
+`;
+
 
     // Call AI service (your existing Replit AI)
     const aiResponse = await fetch(
