@@ -1,19 +1,21 @@
-const uploadBtn = document.getElementById("uploadBtn");
 const fileInput = document.getElementById("fileInput");
+const uploadBtn = document.getElementById("uploadBtn");
 const statusEl = document.getElementById("status");
-const resultEl = document.getElementById("result");
+const outputEl = document.getElementById("output");
 
-uploadBtn.addEventListener("click", async () => {
+uploadBtn.onclick = async () => {
   if (!fileInput.files.length) {
-    alert("Please select a file");
+    statusEl.textContent = "Please select a PDF file.";
     return;
   }
 
-  statusEl.innerText = "Uploading...";
-  resultEl.innerText = "";
+  outputEl.style.display = "none";
+  outputEl.textContent = "";
+  uploadBtn.disabled = true;
 
   try {
-    // ---------- Upload ----------
+    statusEl.textContent = "Uploading document...";
+
     const formData = new FormData();
     formData.append("document", fileInput.files[0]);
 
@@ -23,44 +25,21 @@ uploadBtn.addEventListener("click", async () => {
     });
 
     const uploadData = await uploadRes.json();
+    statusEl.textContent = "Analyzing document with AI...";
 
-    if (!uploadData.success) {
-      throw new Error("Upload failed");
-    }
-
-    statusEl.innerText = "Processing...";
-
-    // ---------- Process ----------
     const processRes = await fetch(`/process/${uploadData.taskId}`, {
       method: "POST"
     });
 
-    const processData = await processRes.json();
+    const result = await processRes.json();
 
-    if (!processData.success) {
-      throw new Error("Processing failed");
-    }
-
-    // ---------- Display result ----------
-    const aiResult = processData.result;
-
-    let outputText = "";
-
-    if (typeof aiResult === "string") {
-      outputText = aiResult;
-    } else if (aiResult.summary) {
-      outputText = aiResult.summary;
-    } else if (aiResult.text) {
-      outputText = aiResult.text;
-    } else {
-      outputText = JSON.stringify(aiResult, null, 2);
-    }
-
-    statusEl.innerText = "Completed ✅";
-    resultEl.innerText = outputText;
+    statusEl.textContent = "Completed ✓";
+    outputEl.textContent = result.summary;
+    outputEl.style.display = "block";
 
   } catch (err) {
-    statusEl.innerText = "Error ❌";
-    resultEl.innerText = err.message;
+    statusEl.textContent = "Error: " + err.message;
+  } finally {
+    uploadBtn.disabled = false;
   }
-});
+};
