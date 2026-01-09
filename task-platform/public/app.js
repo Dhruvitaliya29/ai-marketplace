@@ -1,10 +1,12 @@
-const uploadForm = document.getElementById("uploadForm");
+console.log("app.js loaded ✅");
+
+const form = document.getElementById("uploadForm");
 const fileInput = document.getElementById("document");
-const taskTypeSelect = document.getElementById("taskType");
+const taskType = document.getElementById("taskType");
 const statusText = document.getElementById("status");
 const summaryBox = document.getElementById("summary");
 
-uploadForm.addEventListener("submit", async (e) => {
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   statusText.innerText = "Uploading...";
@@ -17,12 +19,10 @@ uploadForm.addEventListener("submit", async (e) => {
 
   const formData = new FormData();
   formData.append("document", fileInput.files[0]);
-  formData.append("taskType", taskTypeSelect.value);
+  formData.append("taskType", taskType.value);
 
   try {
-    // ----------------------
-    // 1️⃣ Upload file
-    // ----------------------
+    // 1️⃣ Upload
     const uploadRes = await fetch("/upload", {
       method: "POST",
       body: formData
@@ -35,13 +35,10 @@ uploadForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    const taskId = uploadData.taskId;
     statusText.innerText = "Processing with AI...";
 
-    // ----------------------
-    // 2️⃣ Process document
-    // ----------------------
-    const processRes = await fetch(`/process/${taskId}`, {
+    // 2️⃣ Process
+    const processRes = await fetch(`/process/${uploadData.taskId}`, {
       method: "POST"
     });
 
@@ -52,12 +49,8 @@ uploadForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    // ----------------------
-    // 3️⃣ Show result ✅
-    // ----------------------
-    statusText.innerText = "Completed";
-
-    // 🔥 THIS WAS THE BUG FIX
+    // 3️⃣ Display
+    statusText.innerText = "Completed ✅";
     summaryBox.innerText =
       processData.result?.summary || "No summary generated";
 
