@@ -8,7 +8,7 @@ import fetch from "node-fetch";
 import { fileURLToPath } from "url";
 
 // --------------------
-// App Setup
+// App setup
 // --------------------
 const app = express();
 app.use(cors());
@@ -21,7 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --------------------
-// Storage
+// Storage setup
 // --------------------
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
@@ -30,12 +30,13 @@ const TASKS_FILE = path.join(__dirname, "tasks.json");
 if (!fs.existsSync(TASKS_FILE)) fs.writeFileSync(TASKS_FILE, "[]");
 
 // --------------------
-// Serve Frontend
+// Serve frontend
 // --------------------
 app.use(express.static(path.join(__dirname, "public")));
-app.get("/", (_, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html"))
-);
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // --------------------
 // Multer
@@ -43,7 +44,7 @@ app.get("/", (_, res) =>
 const upload = multer({ dest: UPLOAD_DIR });
 
 // --------------------
-// Upload API
+// Upload document
 // --------------------
 app.post("/upload", upload.single("document"), (req, res) => {
   if (!req.file) {
@@ -51,11 +52,13 @@ app.post("/upload", upload.single("document"), (req, res) => {
   }
 
   const tasks = JSON.parse(fs.readFileSync(TASKS_FILE));
+
   const task = {
     id: Date.now(),
-    storedFile: req.file.filename,
     originalFile: req.file.originalname,
+    storedFile: req.file.filename,
     status: "pending",
+    createdAt: new Date().toISOString(),
     result: null
   };
 
@@ -66,7 +69,7 @@ app.post("/upload", upload.single("document"), (req, res) => {
 });
 
 // --------------------
-// Process API
+// Process document
 // --------------------
 app.post("/process/:id", async (req, res) => {
   try {
@@ -74,31 +77,50 @@ app.post("/process/:id", async (req, res) => {
     const task = tasks.find(t => t.id == req.params.id);
     if (!task) return res.status(404).json({ error: "Task not found" });
 
-    const buffer = fs.readFileSync(path.join(UPLOAD_DIR, task.storedFile));
-    const pdfData = await pdf(buffer);
+    const filePath = path.join(UPLOAD_DIR, task.storedFile);
+    const buffer = fs.readFileSync(filePath);
 
-    if (!pdfData.text || pdfData.text.trim().length < 50) {
-      return res.status(400).json({ error: "Document has no readable text" });
+    const pdfData = await pdf(buffer);
+    let text = pdfData.text || "";
+
+    // -------- CLEAN TEXT --------
+    text = text
+      .replace(/\s+/g, " ")
+      .replace(/Page \d+/gi, "")
+      .trim();
+
+    if (text.length < 50) {
+      return res.status(400).json({
+        error: "Document has no readable text"
+      });
     }
 
-    // 🔥 UNIVERSAL PROMPT (KEY FIX)
+    // -------- STRONG UNIVERSAL PROMPT --------
     const prompt = `
-You are an intelligent document analysis AI.
+You are a professional AI document analyst.
 
-Analyze the document below and return ONLY a clear, human-readable summary.
+Your task:
+- Understand the document content
+- Identify what kind of document it is automatically
+- Summarize it clearly for a human reader
 
 Rules:
-- Automatically understand document type
-- Extract important facts, names, numbers, dates
-- Do NOT describe yourself
 - Do NOT mention instructions
-- Do NOT return JSON
-- Return ONLY the final summary text
+- Do NOT mention that you are an AI
+- Do NOT guess information
+- Use simple professional language
+- Be accurate and factual
+
+Output format (ONLY THIS):
+- Document type
+- Key points (bullet points)
+- Short summary paragraph
 
 Document:
-${pdfData.text}
+"""${text}"""
 `;
 
+    // -------- CALL AI --------
     const aiResponse = await fetch(
       "https://ai-marketplace--DhruvItaliya.replit.app/infer",
       {
@@ -111,31 +133,43 @@ ${pdfData.text}
       }
     );
 
-    if (!aiResponse.ok) throw new Error("AI service failed");
+    if (!aiResponse.ok) {
+      throw new Error("AI service failed");
+    }
 
-    const aiJson = await aiResponse.json();
+    const aiData = await aiResponse.json();
 
-    // ✅ Normalize output
-    const finalSummary =
-      aiJson?.result?.summary ||
-      aiJson?.summary ||
-      "No summary generated";
+    // -------- CLEAN RESULT --------
+    let summary =
+      aiData?.result?.summary ||
+      aiData?.summary ||
+      "";
+
+    summary = summary.replace(/```/g, "").trim();
+
+    if (!summary) {
+      summary = "Summary could not be generated.";
+    }
 
     task.status = "completed";
-    task.result = finalSummary;
+    task.result = { summary };
 
     fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2));
 
-    res.json({ summary: finalSummary });
+    res.json({ summary });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: "Processing failed",
+      details: err.message
+    });
   }
 });
 
 // --------------------
-// Start Server
+// Start server
 // --------------------
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () =>
-  console.log("Task platform running on", PORT)
-);
+app.listen(PORT, () => {
+  console.log("Task platform running on", PORT);
+});
